@@ -18,18 +18,23 @@ func GetZone(infile string, zone string) <-chan dns.RR {
 	out := make(chan dns.RR, 10000)
 
 	// start zone file parsing
-	tokens := dns.ParseZone(f, dns.Fqdn(zone), infile)
+	//tokens := dns.ParseZone(f, dns.Fqdn(zone), infile)
+	zp := dns.NewZoneParser(f, dns.Fqdn(zone), infile)
 
 	// translate tokens to RR and write to output channel
 	go func() {
-		for token := range tokens {
-			if token.Error != nil {
-				panic(token.Error)
+		defer f.Close()
+		defer close(out)
+		for {
+			rr, ok := zp.Next()
+			if rr == nil || !ok {
+				break
 			}
-			out <- token.RR
+			out <- rr
 		}
-		f.Close()
-		close(out)
+		if err := zp.Err(); err != nil {
+			log.Fatal(err)
+		}
 	}()
 
 	// return the output channel
